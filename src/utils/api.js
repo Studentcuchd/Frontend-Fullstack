@@ -1,5 +1,5 @@
 // Simple API client using fetch with base URL and auth token support
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE = process.env.REACT_APP_API_URL;
 
 function getHeaders(auth = true) {
   // When using cookie-based auth, we don't attach Authorization header from localStorage
@@ -7,15 +7,31 @@ function getHeaders(auth = true) {
 }
 
 async function request(path, { method = 'GET', body, auth = true } = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: getHeaders(auth),
-    credentials: 'include',
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const url = `${API_BASE}${path}`;
+  // Helpful debug output when diagnosing network / CORS issues
+  // Remove or lower verbosity in production if desired
+  console.debug('[api] request:', method, url);
+
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: getHeaders(auth),
+      // Required when backend uses httpOnly cookies for session/auth
+      credentials: 'include',
+      // explicit CORS mode for clarity (default is 'cors' for cross-origin requests)
+      mode: 'cors',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    // Network-level error (DNS, CORS preflight blocked, connection refused, etc.)
+    console.error('[api] fetch error for', url, err);
+    throw new Error('Network error: failed to reach the API (check console for details)');
+  }
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const message = data?.message || 'Request failed';
+    const message = data?.message || `Request failed (${res.status})`;
     throw new Error(message);
   }
   return data;
